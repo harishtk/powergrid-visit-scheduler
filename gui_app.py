@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 from datetime import datetime
 import copy
+import csv
+import os
 
 # Import core scheduling functions from the existing script
 from powergrid_visit_scheduler import generate_schedule, DEFAULT_INCHARGES, DEFAULT_PROJECTS
@@ -28,6 +30,7 @@ class SchedulerApp(tk.Tk):
         self.incharges = copy.deepcopy(DEFAULT_INCHARGES)
         self.projects = copy.deepcopy(DEFAULT_PROJECTS)
         self.current_project_idx = None
+        self.last_schedule = None  # Store last generated schedule for export
         
         self.create_widgets()
         
@@ -70,14 +73,17 @@ class SchedulerApp(tk.Tk):
         self.tab_supervisors = ttk.Frame(self.notebook)
         self.tab_projects = ttk.Frame(self.notebook)
         self.tab_schedule = ttk.Frame(self.notebook)
+        self.tab_export = ttk.Frame(self.notebook)
 
         self.notebook.add(self.tab_supervisors, text="Supervisors")
         self.notebook.add(self.tab_projects, text="Projects")
         self.notebook.add(self.tab_schedule, text="Generate Schedule")
+        self.notebook.add(self.tab_export, text="Export")
 
         self.build_supervisors_tab()
         self.build_projects_tab()
         self.build_schedule_tab()
+        self.build_export_tab()
 
     # --- Supervisors Tab ---
     def build_supervisors_tab(self):
@@ -421,6 +427,7 @@ class SchedulerApp(tk.Tk):
             
         try:
             schedule = generate_schedule(self.incharges, self.projects, start_dt, end_dt)
+            self.last_schedule = schedule  # Store for export
             
             # Populate Schedule Treeview
             for month, data in schedule.items():
@@ -454,6 +461,85 @@ class SchedulerApp(tk.Tk):
             import traceback
             err = traceback.format_exc()
             messagebox.showerror("Scheduling Error", f"An error occurred while generating the schedule:\n\n{err}")
+
+    # --- Export Tab ---
+    def build_export_tab(self):
+        main_frame = ttk.Frame(self.tab_export, padding=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        export_frame = ttk.LabelFrame(main_frame, text="Export Schedule to CSV", padding=20)
+        export_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        info_text = (
+            "Export the last generated schedule as a CSV file.\n"
+            "The CSV is saved to the 'exports' folder in the application root directory.\n"
+            "The file is UTF-8 encoded with BOM for seamless import into Microsoft Excel."
+        )
+        ttk.Label(export_frame, text=info_text, wraplength=700, justify=tk.LEFT).pack(anchor=tk.W, pady=(0, 15))
+
+        # Filename entry
+        name_frame = ttk.Frame(export_frame)
+        name_frame.pack(fill=tk.X, pady=(0, 15))
+        ttk.Label(name_frame, text="File name:").pack(side=tk.LEFT, padx=(0, 10))
+        self.entry_export_name = ttk.Entry(name_frame, width=40)
+        self.entry_export_name.pack(side=tk.LEFT, padx=(0, 10))
+        self.entry_export_name.insert(0, "schedule_export")
+        ttk.Label(name_frame, text=".csv").pack(side=tk.LEFT)
+
+        ttk.Button(export_frame, text="Export CSV", command=self.do_export_csv).pack(anchor=tk.W, pady=(0, 10))
+
+        # Status label
+        self.export_status = ttk.Label(export_frame, text="", foreground="green")
+        self.export_status.pack(anchor=tk.W, pady=(5, 0))
+
+    def do_export_csv(self):
+        if not self.last_schedule:
+            messagebox.showwarning("No Schedule", "Please generate a schedule first (in the 'Generate Schedule' tab) before exporting.")
+            return
+
+        filename = self.entry_export_name.get().strip()
+        if not filename:
+            filename = "schedule_export"
+        if not filename.endswith(".csv"):
+            filename += ".csv"
+
+        # Determine exports directory relative to the script location
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+        exports_dir = os.path.join(app_dir, "exports")
+        os.makedirs(exports_dir, exist_ok=True)
+
+        filepath = os.path.join(exports_dir, filename)
+
+        try:
+            # Write with UTF-8 BOM so Excel auto-detects encoding
+            with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
+                writer = csv.writer(f)
+
+                # Schedule assignments sheet
+                writer.writerow(["Month", "Supervisor", "Location", "Distance (km)", "Week"])
+                for month, data in self.last_schedule.items():
+                    if not data:
+                        writer.writerow([month, "No locations", "-", "-", "-"])
+                        continue
+                    for a in data:
+                        writer.writerow([month, a["incharge"], a["location"], a["distance"], a["week"]])
+
+                # Blank separator row
+                writer.writerow([])
+
+                # Cumulative distance summary
+                writer.writerow(["Cumulative Distance Summary"])
+                writer.writerow(["Supervisor", "Total Distance (km)"])
+                cum_distances = {i: 0 for i in self.incharges}
+                for data in self.last_schedule.values():
+                    for a in data:
+                        cum_distances[a["incharge"]] += a["distance"]
+                for inc in sorted(self.incharges):
+                    writer.writerow([inc, cum_distances[inc]])
+
+            self.export_status.config(text=f"✔ Exported successfully to: {filepath}", foreground="green")
+        except Exception as e:
+            self.export_status.config(text=f"✘ Export failed: {e}", foreground="red")
 
 if __name__ == "__main__":
     app = SchedulerApp()

@@ -55,6 +55,19 @@ If using the virtual environment, simply run:
 4. Go to the **Generate Schedule** tab. The Date parameters are now auto-calculated based on your loaded projects. Click **Generate Schedule**.
 5. Observe the tabular Treeview output which clearly lists the assignments per month and provides a neat **Cumulative Travel Distances Summary** table at the bottom, verifying that the assignments were balanced equitably.
 
+## Developer Documentation: Scheduling Algorithm
+
+The application uses a **Greedy Load Balancing Algorithm** combined with randomization to assign project locations to supervisors fairly.
+
+### How it Works
+1. **Time Iteration**: The scheduler iterates month-by-month from the start date to the end date.
+2. **Active Locations Filter**: For each month, it filters all projects that are currently active (i.e., the current month falls between the project's start and end dates) and gathers their associated locations.
+3. **Randomization**: The list of active locations for the month is shuffled randomly. This prevents deterministic assignment patterns (e.g., the same person always getting the first location in the list) and adds natural variation to the schedule.
+4. **Greedy Assignment**: For each active location, the algorithm identifies the supervisor who currently has the **minimum cumulative travel distance**. It assigns the location to that supervisor.
+5. **Accumulation**: The distance of the newly assigned location is added to the chosen supervisor's running total, and the process repeats for the next location.
+
+This approach ensures that over the course of the schedule, travel burdens are continually balanced and distributed as equitably as possible among all available supervisors.
+
 ## Credits
 Initiated & Ideated By: Navin S
 Prompt By: Hariskumar K

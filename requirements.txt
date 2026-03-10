@@ -1,2 +1,4 @@
 python-dateutil==2.9.0.post0
 six==1.17.0
+customtkinter>=5.2.0
+Pillow>=10.0.0
