@@ -56,4 +56,6 @@ If using the virtual environment, simply run:
 5. Observe the tabular Treeview output which clearly lists the assignments per month and provides a neat **Cumulative Travel Distances Summary** table at the bottom, verifying that the assignments were balanced equitably.
 
 ## Credits
-Author: Haris (with the help of Gravity AI from Google)
+Initiated & Ideated By: Navin S
+Prompt By: Hariskumar K
+AI Assistant: Antigravity (Google)
