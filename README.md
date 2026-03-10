@@ -70,6 +70,26 @@ The application uses a **Greedy Load Balancing Algorithm** combined with randomi
 
 This approach ensures that over the course of the schedule, travel burdens are continually balanced and distributed as equitably as possible among all available supervisors.
 
+## Building Standalone Executables
+
+You can build a standalone executable (no Python installation required to run) using [PyInstaller](https://pyinstaller.org/).
+
+> **Note:** PyInstaller cannot cross-compile — you must build on the target OS.
+
+### Windows
+```bash
+# From within the activated .venv:
+build_windows.bat
+```
+The executable will be at `dist\PowerGridScheduler.exe`.
+
+### Linux
+```bash
+chmod +x build_linux.sh
+./build_linux.sh
+```
+The executable will be at `dist/PowerGridScheduler`.
+
 ## Credits
 Initiated & Ideated By: Navin S
 Prompt By: Hariskumar K

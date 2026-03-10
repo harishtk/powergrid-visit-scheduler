@@ -220,3 +220,8 @@ exports/
 
 # Stored application state (user settings, projects, etc.)
 state.json
+
+# PyInstaller build output
+build/
+dist/
+*.spec
