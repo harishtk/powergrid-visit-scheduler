@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox, scrolledtext
 from datetime import datetime
 import copy
 import csv
+import json
 import os
 
 # Import core scheduling functions from the existing script
@@ -32,6 +33,9 @@ class SchedulerApp(tk.Tk):
         self.current_project_idx = None
         self.last_schedule = None  # Store last generated schedule for export
         
+        # attempt to load saved state before building UI
+        self.load_state()
+        
         self.create_widgets()
         
         # Bind tab change event to update schedule dates automatically
@@ -39,6 +43,10 @@ class SchedulerApp(tk.Tk):
         
         # Initial calculation
         self.auto_fill_schedule_dates()
+        
+        # if we had a last schedule from disk, render it
+        if self.last_schedule:
+            self.render_schedule(self.last_schedule)
 
     def on_tab_changed(self, event):
         current_tab = self.notebook.index(self.notebook.select())
@@ -64,6 +72,83 @@ class SchedulerApp(tk.Tk):
             if force or not self.entry_sch_end.get().strip():
                 self.entry_sch_end.delete(0, tk.END)
                 self.entry_sch_end.insert(0, calc_end.strftime("%Y-%m-%d"))
+
+    # ─── Persistence ───────────────────────────────────────────────────
+    def state_file_path(self):
+        """Return absolute path to the JSON file used for persistence."""
+        base = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(base, "state.json")
+
+    def load_state(self):
+        """Read saved state from disk and apply it to in-memory structures."""
+        path = self.state_file_path()
+        if not os.path.exists(path):
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            print("Failed to load saved state:", e)
+            return
+        # supervisors
+        self.incharges = data.get("incharges", self.incharges)
+        # projects with date parsing
+        projs = data.get("projects", [])
+        for p in projs:
+            for key in ("start", "end"):
+                if key in p and isinstance(p[key], str):
+                    try:
+                        p[key] = datetime.fromisoformat(p[key])
+                    except Exception:
+                        pass
+        if projs:
+            self.projects = projs
+        self.last_schedule = data.get("last_schedule", None)
+
+    def save_state(self):
+        """Serialize current application state to disk."""
+        path = self.state_file_path()
+        data = {
+            "incharges": self.incharges,
+            "projects": [],
+            "last_schedule": self.last_schedule,
+        }
+        for p in self.projects:
+            proj_copy = p.copy()
+            for key in ("start", "end"):
+                if key in proj_copy and isinstance(proj_copy[key], datetime):
+                    proj_copy[key] = proj_copy[key].isoformat()
+            data["projects"].append(proj_copy)
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            print("Failed to save state:", e)
+
+    def render_schedule(self, schedule):
+        """Populate the two schedule treeviews from a precomputed schedule."""
+        self.tree.delete(*self.tree.get_children())
+        self.stat_tree.delete(*self.stat_tree.get_children())
+        for month, data in schedule.items():
+            if not data:
+                self.tree.insert("", tk.END, values=(month, "No locations", "-", "-", "-"))
+                continue
+            for i, a in enumerate(data):
+                tags = ("evenrow",) if i % 2 == 0 else ("oddrow",)
+                self.tree.insert("", tk.END, values=(
+                    month,
+                    a['incharge'],
+                    a['location'],
+                    a['distance'],
+                    a['week']
+                ), tags=tags)
+        self.tree.tag_configure('oddrow', background="#f0f0f0")
+        cum_distances = {i: 0 for i in self.incharges}
+        for data in schedule.values():
+            for a in data:
+                cum_distances[a['incharge']] += a['distance']
+        for inc in sorted(self.incharges):
+            self.stat_tree.insert("", tk.END, values=(inc, cum_distances[inc]))
 
     def create_widgets(self):
         self.notebook = ttk.Notebook(self)
@@ -125,6 +210,7 @@ class SchedulerApp(tk.Tk):
             self.incharges.append(name)
             self.list_supervisors.insert(tk.END, name)
             self.entry_sup_name.delete(0, tk.END)
+            self.save_state()
 
     def remove_supervisor(self):
         selection = self.list_supervisors.curselection()
@@ -133,6 +219,7 @@ class SchedulerApp(tk.Tk):
             name = self.list_supervisors.get(idx)
             self.incharges.remove(name)
             self.list_supervisors.delete(idx)
+            self.save_state()
 
     # --- Projects Tab ---
     def build_projects_tab(self):
@@ -220,6 +307,8 @@ class SchedulerApp(tk.Tk):
         for i, p in enumerate(self.projects):
             name = p.get("name", f"Project {i+1}")
             self.list_projects.insert(tk.END, name)
+        # also persist changes whenever list is rebuilt from state
+        self.save_state()
 
     def on_project_select(self, event):
         selection = self.list_projects.curselection()
@@ -279,6 +368,7 @@ class SchedulerApp(tk.Tk):
         self.list_projects.delete(self.current_project_idx)
         self.list_projects.insert(self.current_project_idx, new_name)
         self.list_projects.selection_set(self.current_project_idx)
+        self.save_state()
 
     def new_project(self):
         new_p = {
@@ -291,6 +381,7 @@ class SchedulerApp(tk.Tk):
         self.refresh_projects_list()
         self.list_projects.selection_set(tk.END)
         self.on_project_select(None)
+        self.save_state()
 
     def delete_project(self):
         selection = self.list_projects.curselection()
@@ -307,6 +398,7 @@ class SchedulerApp(tk.Tk):
         self.list_locations.delete(0, tk.END)
         
         self.refresh_projects_list()
+        self.save_state()
 
     def add_location(self):
         if self.current_project_idx is None:
@@ -331,6 +423,7 @@ class SchedulerApp(tk.Tk):
         self.entry_loc_name.delete(0, tk.END)
         self.entry_loc_dist.delete(0, tk.END)
         self.refresh_locations_list()
+        self.save_state()
 
     def remove_location(self):
         if self.current_project_idx is None:
@@ -342,6 +435,7 @@ class SchedulerApp(tk.Tk):
         p = self.projects[self.current_project_idx]
         del p["locations"][idx]
         self.refresh_locations_list()
+        self.save_state()
 
     # --- Schedule Tab ---
     def build_schedule_tab(self):
@@ -428,6 +522,7 @@ class SchedulerApp(tk.Tk):
         try:
             schedule = generate_schedule(self.incharges, self.projects, start_dt, end_dt)
             self.last_schedule = schedule  # Store for export
+            self.save_state()  # persist generated result
             
             # Populate Schedule Treeview
             for month, data in schedule.items():

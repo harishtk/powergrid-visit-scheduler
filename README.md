@@ -55,6 +55,8 @@ If using the virtual environment, simply run:
 4. Go to the **Generate Schedule** tab. The Date parameters are now auto-calculated based on your loaded projects. Click **Generate Schedule**.
 5. Observe the tabular Treeview output which clearly lists the assignments per month and provides a neat **Cumulative Travel Distances Summary** table at the bottom, verifying that the assignments were balanced equitably.
 
+> **State Persistence**: your supervisors, projects, and the last generated schedule are automatically saved to `state.json` in the application directory. The next time you launch the GUI it will restore that data, so you can pick up where you left off.  (The file is ignored by Git; see `.gitignore`.)
+
 ## Developer Documentation: Scheduling Algorithm
 
 The application uses a **Greedy Load Balancing Algorithm** combined with randomization to assign project locations to supervisors fairly.

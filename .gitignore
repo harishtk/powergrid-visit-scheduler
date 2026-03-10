@@ -217,3 +217,6 @@ __marimo__/
 
 # Exported schedule CSVs
 exports/
+
+# Stored application state (user settings, projects, etc.)
+state.json
